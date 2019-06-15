@@ -1,0 +1,14 @@
+ggplot(data = filter(df_m, !is.na(NAME_0))) +
+  geom_point(aes(x = hc71, y = hc72, color = hc27),
+             alpha = 0.05) +
+  geom_smooth(aes(x = hc71, y = hc72, color = "pooled"), 
+              method = "lm", se = F) +
+  geom_smooth(aes(x = hc71, y = hc72, color = hc27), 
+              method = "lm", se = F) +
+  labs(x = "Weight-for-age z-score", 
+       y = "Weight-for-height z-score") +
+  theme_minimal() +
+  theme(axis.line = element_line(),
+        legend.position = "top") +
+  scale_color_viridis_d(guide = guide_legend(title = "")) +
+  facet_wrap(~NAME_0)
