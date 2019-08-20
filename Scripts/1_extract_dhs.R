@@ -17,8 +17,8 @@ set_rdhs_config(email = "tbilling@umd.edu",
 # To find dhs country naming conventions
 (cnames <- dhs_countries(returnFields = c("CountryName", "DHS_CountryCode")))
 
-# Want Nigeria and Kenya waves
-wants <- c("NG", "KE")
+# Want Nigeria, Kenya, and Uganda waves
+wants <- c("NG", "KE", "UG")
 
 survs <- dhs_surveys(countryIds = wants,
                      surveyType = "DHS")
@@ -26,11 +26,18 @@ survs <- dhs_surveys(countryIds = wants,
 datasets <- dhs_datasets(surveyIds = survs$SurveyId, 
                          fileFormat = "flat",
                          fileType = c("PR"),
-                         surveyYear = c(2004:2017))
+                         surveyYear = c(2004:2015))
 
 # Pulling only a handfull of variables
 varnames <- c("hv000", # survey id
               "hc27", # sex
+              "hv270", # wealth cat
+              "hv271", # wealth fac score
+              "hc61", # mother edu
+              "hc63", # preceding birth interval
+              "hc64", # birth order
+              "hv204", # time to water
+              "hv201", # water source
               "hv005", 
               "hc1", # child age in months
               "hc19", # survey year
@@ -51,7 +58,7 @@ extract <- extract_dhs(questions, add_geo = T)
 # Shapefiles --------------------------------------------------------------
 
 # Countries we want
-countries <- c("Kenya", "Nigeria")
+countries <- c("Kenya", "Nigeria", "Uganda")
 
 # Function to pull in GADM shapefiles from raster 
 shpfun <- function(country) {
@@ -65,9 +72,6 @@ shp <- list(shps_afr, makeUniqueIDs = T) %>%
   do.call(rbind, .) %>% 
   st_as_sf()
 
-# Quick plot to make sure we're okay
-ggplot(data = shp) +
-  geom_sf() 
   
 
 
@@ -98,6 +102,7 @@ sf_extract <-
   map(function(z) filter(z, !is.na(LATNUM) & !is.na(LONGNUM))) %>%           
   # convert to sf object
   map(function(x) st_as_sf(x, crs = crs, coords = c("LONGNUM", "LATNUM")))
+
 
 
 sf_extract_clean <- sf_extract %>% map(clean_dhs)
@@ -132,6 +137,7 @@ temp_nog <- temp_nog %>% mutate(cc = substr(GID_0, 1,2))
 
 df_m <- sf_extract_big_nog %>% left_join(temp_nog, by = c("CLUSTER", "cc"))
 
+
 # Save frame
-save(df_m, file = here::here("Data", "dhs_kn_ng.Rdata"))
+save(df_m, file = here::here("Data", "dhs_working.Rdata"))
 
