@@ -39,21 +39,37 @@ get_countries <- function(level, countries) {
 }
 
 adm1 <- get_countries(level = 1, 
-                      countries = c("Nigeria", "Kenya", "Uganda", "Mali"))
+                      countries = c("Nigeria", "Kenya", "Uganda", "Mali",
+                                    "Burundi", "Democratic Republic of the Congo",
+                                    "Rwanda", "Niger")) %>% 
+  filter(ENGTYPE_1 != "Water body") %>% 
+  st_cast()
+
+chad1 <- sf::read_sf(here::here("Spatial Data Repository",
+                                "chad","ch14", "dhs", "shps",
+                                "sdr_subnational_data_dhs_2014.shp")) %>% 
+  select(CNTRYNAMEE, DHSREGEN) %>% 
+  rename(NAME_1 = DHSREGEN, NAME_0 = CNTRYNAMEE) %>% 
+  st_cast(., "MULTIPOLYGON")
+
+adm1 <- adm1 %>% select(NAME_0, NAME_1) %>% 
+  rbind(chad1)
+
+sf::st_geometry_type(adm1$geometry)
 
 # Convert to velox raster
 chirts_vx <- velox(chirts_stack)
 
 # Extract mean
-chirts_extract <- chirts_vx$extract(adm1, fun = mean)
+chirts_extract <- chirts_vx$extract(adm1, fun = function(x) mean(x, na.rm = TRUE))
 
 # Files are alpha order; since filenames have alpha months, not sorted correctly
 # Hacky way to create ymd var ordered by alpha month, year
 
 alphadates <- c(
   seq(lubridate::ymd("1995-04-01"),
-    lubridate::ymd("2016-04-01"),
-    by = "year"),
+      lubridate::ymd("2016-04-01"),
+      by = "year"),
   seq(lubridate::ymd("1995-08-01"),
       lubridate::ymd("2016-08-01"),
       by = "year"),
@@ -87,7 +103,7 @@ alphadates <- c(
   seq(lubridate::ymd("1995-09-01"),
       lubridate::ymd("2016-09-01"),
       by = "year")
-  )
+)
 
 
 chirts_tidy <- 
@@ -107,7 +123,7 @@ chirts_tidy %>%
 # Checks out with alt sources of temp patterns
 chirts_tidy %>% 
   group_by(NAME_1, NAME_0, lubridate::month(ymd)) %>% 
-  filter(NAME_0 == "Mali") %>% 
+  filter(NAME_0 == "Chad") %>% 
   summarise(m = mean(chirts)) %>% 
   ggplot() +
   geom_point(aes(x = factor(`lubridate::month(ymd)`), y = m, group = NAME_1)) +
@@ -116,5 +132,3 @@ chirts_tidy %>%
   theme_bw()
 
 save(chirts_tidy, file = here::here("chirts_tidy.Rdata"))
-
-

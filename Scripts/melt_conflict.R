@@ -1,8 +1,13 @@
 library(here)
 library(meltt)
+library(sf)
 library(tidyverse)
 
-countries <- c("Nigeria", "Kenya", "Uganda")
+countries = c("Nigeria", "Kenya", "Uganda", "Mali",
+              "Burundi", "Democratic Republic of the Congo",
+              "Rwanda", "Chad", "Niger", "DR Congo (Zaire)", 
+              "Democratic Republic of Congo")
+
 # GED
 GED <- read.csv(here("Data","ged171-csv", "ged171.csv"))
 
@@ -33,15 +38,13 @@ ACLED$event_tax <- as.factor(ACLED$event_tax)
 
 GED$event_tax <- as.factor(GED$type_of_violence)
 
-GTD$event_tax <- as.factor(GTD$attacktype1)
-
 SCAD$event_tax <- as.factor(SCAD$etype)
 
 # Dates
 ACLED$date <- as.Date(ACLED$EVENT_DATE, format = "%d/%m/%Y")
 GED$date <- as.Date(GED$date_start)
-GTD$date <- paste(GTD$iday, "/", GTD$imonth, "/", GTD$iyear, sep="")
-GTD$date <- as.Date(GTD$date, format = "%d/%m/%Y")
+# GTD$date <- paste(GTD$iday, "/", GTD$imonth, "/", GTD$iyear, sep="")
+# GTD$date <- as.Date(GTD$date, format = "%d/%m/%Y")
 SCAD$date <- as.Date(SCAD$startdate, format = "%d-%b-%y")
 
 # End dates
@@ -79,26 +82,39 @@ df.meltt <- full_join(df.meltt, event_tax,
 
 
 # To shapefile ----------------------------------------------------------------
-
-# All countries in Africa + Yemen
-afnames <- raster::ccodes() %>% 
-  filter(NAME %in% countries) %>% 
-  dplyr::select(NAME)
-temp1 <- vector("list", 0)
-for(i in afnames$NAME) {
-  print(i)
-  temp1[[i]] <- raster::getData(name = "GADM", 
-                                country = i, 
-                                download = T, 
-                                level = 1)
+get_countries <- function(level, countries) {
+  
+  temp0 <- vector("list", 0)
+  for(i in countries) {
+    print(i)
+    temp0[[i]] <- raster::getData(name = "GADM", 
+                                  country = i, 
+                                  download = T, 
+                                  level = level)
+  }
+  
+  list(temp0, makeUniqueIDs = T) %>% 
+    purrr::flatten() %>% 
+    do.call(rbind, .) %>% 
+    st_as_sf()
 }
 
-# Join into sf frame
-joined1 <- list(temp1, makeUniqueIDs = T) %>% 
-  purrr::flatten() %>% 
-  do.call(rbind, .) %>% 
-  st_as_sf()
+adm1 <- get_countries(level = 1, 
+                      countries = c("Nigeria", "Kenya", "Uganda", "Mali",
+                                    "Burundi", "Democratic Republic of the Congo",
+                                    "Rwanda", "Niger")) %>% 
+  filter(ENGTYPE_1 != "Water body") %>% 
+  st_cast()
 
+chad1 <- sf::read_sf(here::here("Spatial Data Repository",
+                                "chad","ch14", "dhs", "shps",
+                                "sdr_subnational_data_dhs_2014.shp")) %>% 
+  select(CNTRYNAMEE, DHSREGEN) %>% 
+  rename(NAME_1 = DHSREGEN, NAME_0 = CNTRYNAMEE) %>% 
+  st_cast(., "MULTIPOLYGON")
+
+joined1 <- adm1 %>% select(NAME_0, NAME_1) %>% 
+  rbind(chad1)
 
 p <- df.meltt %>% group_by(date, latitude, longitude, Level_4_text) %>% 
   summarise(events = n()) %>% 
@@ -117,7 +133,7 @@ sf_melt_agg <-
   summarise(violent_events = n())
 
 
-
+# Write a function for this you psycho
 ken_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
                                   lubridate::ymd("2017-01-01"), by = 1),
                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Kenya"],
@@ -139,44 +155,80 @@ uga_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"),
   mutate(day = lubridate::day(ymd)) %>% 
   filter(day == 1) %>% select(-day)
 
-df_blank <- bind_rows(ken_blank, nigeria_blank, uga_blank)
+mal_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Mali"],
+                         NAME_0 = "Mali") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+bur_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Burundi"],
+                         NAME_0 = "Burundi") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+drc_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Democratic Republic of the Congo"],
+                         NAME_0 = "Democratic Republic of the Congo") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+rwa_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Rwanda"],
+                         NAME_0 = "Rwanda") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+
+cha_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Chad"],
+                         NAME_0 = "Chad") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+nig_blank <- expand.grid(ymd = seq(lubridate::ymd("2002-01-01"), 
+                                   lubridate::ymd("2017-01-01"), by = 1),
+                         NAME_1 = joined1$NAME_1[joined1$NAME_0 == "Niger"],
+                         NAME_0 = "Niger") %>% 
+  mutate(day = lubridate::day(ymd)) %>% 
+  filter(day == 1) %>% select(-day)
+
+
+df_blank <- bind_rows(ken_blank, nigeria_blank, uga_blank, mal_blank, drc_blank, 
+                      bur_blank, rwa_blank, cha_blank, nig_blank)
   
 
 sf_melt_final <- df_blank %>% 
   full_join(sf_melt_agg, by = c("NAME_1","NAME_0", "ymd")) %>% 
-  mutate(violent_events = ifelse(is.na(violent_events), 0, violent_events))
+  mutate(violent_events = ifelse(is.na(violent_events), 0, violent_events)) 
 
 sf_melt_final$geometry <- NULL
+
+### From Romain Francois https://purrple.cat/blog/2018/03/02/multiple-lags-with-tidy-evaluation/ ###
+lags <- function(var, n){
+  library(rlang)
+  var <- enquo(var)
+  
+  indices <- seq_len(n)
+  map( indices, ~quo(lag(!!var, !!.x)) ) %>% 
+    set_names(sprintf("lag_%s_%02d", quo_text(var), indices))
+  
+}
+
+
 
 sf_melt_final <-
   sf_melt_final %>% 
   arrange(NAME_1, ymd) %>% 
   select(-year, -month) %>% 
   group_by(NAME_1, NAME_0) %>% 
-  mutate(violent_events_lag1 = lag(violent_events, 1, order_by = NAME_1),
-         violent_events_lag2 = lag(violent_events, 2, order_by = NAME_1),
-         violent_events_lag3 = lag(violent_events, 3, order_by = NAME_1),
-         violent_events_lag4 = lag(violent_events, 4, order_by = NAME_1),
-         violent_events_lag5 = lag(violent_events, 5, order_by = NAME_1),
-         violent_events_lag6 = lag(violent_events, 6, order_by = NAME_1),
-         violent_events_lag7 = lag(violent_events, 7, order_by = NAME_1),
-         violent_events_lag8 = lag(violent_events, 8, order_by = NAME_1),
-         violent_events_lag9 = lag(violent_events, 9, order_by = NAME_1),
-         violent_events_lag10 = lag(violent_events, 10, order_by = NAME_1),
-         violent_events_lag11 = lag(violent_events, 11, order_by = NAME_1),
-         violent_events_lag12 = lag(violent_events, 12, order_by = NAME_1),
-         violent_events_lag13 = lag(violent_events, 13, order_by = NAME_1),
-         violent_events_lag14 = lag(violent_events, 14, order_by = NAME_1),
-         violent_events_lag15 = lag(violent_events, 15, order_by = NAME_1),
-         violent_events_lag16 = lag(violent_events, 16, order_by = NAME_1),
-         violent_events_lag17 = lag(violent_events, 17, order_by = NAME_1),
-         violent_events_lag18 = lag(violent_events, 18, order_by = NAME_1),
-         violent_events_lag19 = lag(violent_events, 19, order_by = NAME_1),
-         violent_events_lag20 = lag(violent_events, 20, order_by = NAME_1),
-         violent_events_lag21 = lag(violent_events, 21, order_by = NAME_1),
-         violent_events_lag22 = lag(violent_events, 22, order_by = NAME_1),
-         violent_events_lag23 = lag(violent_events, 23, order_by = NAME_1),
-         violent_events_lag24 = lag(violent_events, 24, order_by = NAME_1))
+  mutate(!!!lags(violent_events, 36))
+
 
 
 

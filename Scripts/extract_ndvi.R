@@ -37,7 +37,25 @@ get_countries <- function(level, countries) {
 }
 
 adm1 <- get_countries(level = 1, 
-                      countries = c("Nigeria", "Kenya", "Uganda", "Mali"))
+                      countries = c("Nigeria", "Kenya", "Uganda", "Mali",
+                                    "Burundi", "Democratic Republic of the Congo",
+                                    "Rwanda", "Niger")) %>% 
+  filter(ENGTYPE_1 != "Water body") %>% 
+  st_cast()
+
+chad1 <- sf::read_sf(here::here("Spatial Data Repository",
+                                "chad","ch14", "dhs", "shps",
+                                "sdr_subnational_data_dhs_2014.shp")) %>% 
+  select(CNTRYNAMEE, DHSREGEN) %>% 
+  rename(NAME_1 = DHSREGEN, NAME_0 = CNTRYNAMEE) %>% 
+  st_cast(., "MULTIPOLYGON")
+
+adm1 <- adm1 %>% select(NAME_0, NAME_1) %>% 
+  rbind(chad1)
+
+
+
+
 
 # Reproject shapefile to match ndvi (sin)
 ndvi = raster(ndvi_files[[1]])
@@ -56,7 +74,6 @@ plan(multiprocess)
 ndvi <- future_map_dfr(.x = c(ndvi_extract = 1:238), ~fun(.x))
 save(ndvi, file = "E:/NDVI/Tibbles/ndvi.Rdata")
 
-ndvi %>% head()
 
 
 ndvi_tidy <- 
@@ -70,4 +87,4 @@ ndvi_tidy <-
                          length(adm1$NAME_1)))
 
 
-save(ndvi_tidy, file = here::here("ndvi_tidy.Rdata"))
+save(ndvi_tidy, file = here::here("Data", "Climate", "ndvi_tidy.Rdata"))

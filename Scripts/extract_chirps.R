@@ -10,22 +10,22 @@ library(ggplot2)
 
 
 # Download chirps ---------------------------------------------------------
-getCHIRPS(region = "africa", 
-          format = "tifs", 
-          tres = "monthly", 
-          begin = as.Date("1995-01-01"),
-          dsn = "E:/CHIRPS", cores = 4)
-
-
-chirps_files <- list.files("E:/CHIRPS", full.names = T)
-extractCHIRPS(chirps_files, dsn = "E:/CHIRPS")
+# getCHIRPS(region = "africa",
+#           format = "tifs",
+#           tres = "monthly",
+#           begin = as.Date("1995-01-01"),
+#           dsn = "E:/CHIRPS", cores = 4)
+# 
+# 
+# chirps_files <- list.files("E:/CHIRPS", full.names = T)
+# extractCHIRPS(chirps_files, dsn = "E:/CHIRPS", cores = 4)
 
 
 # Stack chirps rasters ----------------------------------------------------
 # Rasters on usb drive
 chirps_files <- list.files(path = ("E:/CHIRPS"),
-                        pattern =".tif$", 
-                        full.names = TRUE)
+                           pattern =".tif$", 
+                           full.names = TRUE)
 chirps_stack <- stack(chirps_files)
 
 # Replace NAs
@@ -50,10 +50,25 @@ get_countries <- function(level, countries) {
     purrr::flatten() %>% 
     do.call(rbind, .) %>% 
     st_as_sf()
-  }
+}
 
 adm1 <- get_countries(level = 1, 
-                      countries = c("Nigeria", "Kenya", "Uganda", "Mali"))
+                      countries = c("Nigeria", "Kenya", "Uganda", "Mali",
+                                    "Burundi", "Democratic Republic of the Congo",
+                                    "Rwanda", "Niger")) %>% 
+  filter(ENGTYPE_1 != "Water body")
+
+chad1 <- sf::read_sf(here::here("Spatial Data Repository",
+                                    "chad","ch14", "dhs", "shps",
+                                    "sdr_subnational_data_dhs_2014.shp")) %>% 
+  select(CNTRYNAMEE, DHSREGEN) %>% 
+  rename(NAME_1 = DHSREGEN, NAME_0 = CNTRYNAMEE)
+
+adm1 <- adm1 %>% select(NAME_0, NAME_1) %>% 
+  rbind(chad1)
+
+
+
 
 # Convert to velox raster
 chirps_vx <- velox(chirps_stack)
@@ -61,7 +76,7 @@ chirps_vx <- velox(chirps_stack)
 # Extract mean
 chirps_extract <- chirps_vx$extract(adm1, fun = function(x) mean(x, na.rm = TRUE))
 
-# Should be a matrix 151 X 299 
+# Should be a matrix 228 X 299 
 dim(chirps_extract)
 
 plot(density(chirps_extract[,1]))
@@ -69,7 +84,7 @@ plot(density(chirps_extract[,299]))
 
 # Need to go from wide matrix to long df
 # Can take extract, create column nams seq along the min to max month-year
-# january 2000 to november 2019
+# january 1995 to november 2019
 
 chirps_tidy <- 
   bind_cols(adm1, data.frame(chirps_extract)) %>% 
@@ -77,9 +92,8 @@ chirps_tidy <-
                names_to = "chirps_index",
                values_to = "chirps") %>% 
   bind_cols(., ymd = rep(seq(lubridate::ymd("1995-01-01"),
-                       lubridate::ymd("2019-11-01"),
-                       by = "month"), 
-                       length(adm1$NAME_1)))
+                             lubridate::ymd("2019-11-01"),
+                             by = "month"), 
+                         length(adm1$NAME_1)))
 
-save(chirps_tidy, file = here::here("chirps_tidy.Rdata"))
-
+save(chirps_tidy, file = here::here("Data", "Climate", "chirps_tidy.Rdata"))
